@@ -1,6 +1,6 @@
 ---
-title: "EDA Project"
-author: "Rao Abdul Hannan, Akylai Batyrbekova, Shreya Patchala"
+title: "LinkedIn Job Postings Analysis"
+author: "Shreya Patchala"
 format:
   pdf:
     colorlinks: true
