@@ -1,0 +1,436 @@
+---
+title: "EDA Project"
+author: "Rao Abdul Hannan, Akylai Batyrbekova, Shreya Patchala"
+format:
+  pdf:
+    colorlinks: true
+---
+
+```{r, echo=FALSE}
+suppressMessages(library(tidyverse))
+suppressMessages(library(ggmap))
+suppressMessages(library(ggthemes))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(scales))
+suppressMessages(library(gt))
+suppressMessages(library(patchwork))
+suppressMessages(library(tidyquant))
+suppressMessages(library(magrittr))
+```
+
+
+```{r, echo=FALSE}
+# Loading the datsets
+company_industries <- read.csv("../companies/company_industries.csv")
+postings <- read.csv("../postings.csv")
+```
+
+
+```{r, echo=FALSE}
+# Filtering for full-time jobs only and converting hourly salaries to annual
+fulltime_postings <- postings |>
+  filter(formatted_work_type == "Full-time") |>
+  mutate(max_salary = ifelse(pay_period == "HOURLY", max_salary * 45 * 48, max_salary),
+         min_salary = ifelse(pay_period == "HOURLY", min_salary * 45 * 48, min_salary))
+```
+
+
+```{r, echo=FALSE}
+# Merging industry names from company_industries dataset with the corresponding company in fulltime_postings dataset by company_id
+fulltime_postings <- merge(fulltime_postings, company_industries, by = "company_id")
+```
+
+
+#### Abstract
+
+This study examines LinkedIn job postings from 2023 and 2024, with a focus on identifying the leading industries and companies with significant hiring activity. The analysis aims to support a talent platform startup in scaling its business by targeting high-demand sectors and selecting a fast-growing company as an anchor client. The report highlights industries with strong hiring needs and identifies Thermo Fisher Scientific as a potential anchor client. Thermo Fisher is a high-growth, financially stable company that currently does not use an Applicant Tracking System (ATS), making it an ideal candidate. The study employs various graphical representations to visualize company dominance and job market trends across industries. These insights provide a clear understanding of the current job market and spotlight industry leaders.
+
+
+#### Introduction
+
+In today's competitive hiring landscape, companies are actively seeking skilled candidates, while job seekers face challenges in finding the right opportunities. Many employers use Applicant Tracking Systems (ATS) to filter applications, which can inadvertently introduce biases. clAIrvoyant's AI-driven platform aims to address this issue by offering unbiased, efficient resume parsing services. 
+
+LinkedIn, as one of the largest job platforms, offers a valuable dataset for analyzing hiring trends. This study utilizes LinkedIn job postings from 2023 and 2024 to identify high-demand industries and a suitable anchor client for the startup clAIrvoyant. The research focuses on identifying industries with the strongest hiring trends, helping to pinpoint sectors with the highest demand for talent and guiding the platform's market strategy. Additionally, the study explores financially stable, rapidly growing companies within those industries that are not currently using Applicant Tracking Systems (ATS), enabling clAIrvoyant to target ideal clients for its AI-driven services. Finally, the report identifies an ideal anchor client for business development, based on growth potential, financial stability, and hiring needs, with Thermo Fisher Scientific emerging as a strong candidate to serve as a foundation for the platform’s expansion. This report provides data-driven insights into current job market trends, highlighting key industries and companies leading in talent acquisition. By addressing these questions, the study offers strategic guidance for the startup’s business development efforts.
+
+Research Questions:
+
+**-   Which industries and companies have the highest number of job postings?**
+
+**-   Does average salary have an effect on the number of job postings a company has or the number of views a that company's jobs has from potential applicants?**
+
+**-   Does state provide us information about the number of jobs, average salary and growth of the company?**
+
+
+#### Data
+
+The dataset utilized in this study consists of four key components: Companies, Jobs, Mappings, and Postings, all sourced from LinkedIn job postings from 2023 and 2024. The dataset contains over 124,000 job listings, offering detailed information for analysis. Each component plays a critical role in understanding the job market dynamics:
+
+-   Companies: Includes company names, industries, size, specialities offered by the company and number of employees
+
+-   Jobs: Contains job benefits, skills and salary. This helps categorize the types of roles being advertised
+
+-   Mappings: Provides connections between industries, skills, allowing for the classification of job postings into relevant industries
+
+-   Postings: Encompasses the specific job postings, including job posting URLs, application types, and listing dates
+
+```{r, echo=FALSE}
+
+# Create a data frame with variables and descriptions
+variable_descriptions <- data.frame(
+  Variable = c("job_id", "company_id", "title", "description", "max_salary", "med_salary", "min_salary",
+               "pay_period", "formatted_work_type", "location", "applies", "original_listed_time",
+               "remote_allowed", "views", "job_posting_url", "application_url", "application_type", 
+               "expiry", "closed_time", "formatted_experience_level", "skills_desc", "listed_time", 
+               "posting_domain", "sponsored", "work_type", "currency", "compensation_type", "type", 
+               "inferred", "industry_id", "skill_abr", "salary_id", "name", "company_size", "country",
+               "state", "city", "zip_code", "address", "url", "speciality", "employee_count", 
+               "follower_count", "time_recorded", "industry_name", "skill_name"),
+  
+  Description = c("The job ID as defined by LinkedIn", "Identifier for the company associated with the job posting", 
+                  "Job title", "Job description", "Maximum salary", "Median salary", "Minimum salary", 
+                  "Pay period for salary (Hourly, Monthly, Yearly)", "Type of work (Fulltime, Parttime, Contract)", 
+                  "Job location", "Number of applications that have been submitted", 
+                  "Original time the job was listed", "Whether job permits remote work", 
+                  "Number of times the job posting has been viewed", "URL to the job posting on a platform", 
+                  "URL where applications can be submitted", "Type of application process (offsite, complex/simple onsite)", 
+                  "Expiration date or time for the job listing", "Time to close job listing", 
+                  "Job experience level (entry, associate, executive, etc)", "Description detailing required skills for job", 
+                  "Time when the job was listed", "Domain of the website with application", 
+                  "Whether the job listing is sponsored or promoted", "Type of work associated with the job", 
+                  "Currency in which the salary is provided", "Type of compensation for the job", 
+                  "Type of benefit provided (401K, Medical Insurance, etc)", 
+                  "Whether the benefit was tagged or inferred by LinkedIn.", 
+                  "Industry identifier", "Skill abbreviation", "Salary identifier", "Company name", 
+                  "Company size grouping (0 = Smallest, 7 = Largest)", 
+                  "Country of company headquarters", "State of company headquarters", 
+                  "City of company headquarters", "ZIP code of company's headquarters", 
+                  "Address of company's headquarters", "Link to company's LinkedIn page", 
+                  "Specialization or focus area of the company", "Number of employees at company", 
+                  "Number of company followers on LinkedIn", "Unix time of data collection", 
+                  "Industry name", "Skill name")
+)
+
+# Create a nice table using the gt package
+variable_descriptions %>%
+  gt() %>%
+  tab_header(
+    title = md("**Table 1**: Variable Descriptions")
+  ) %>%
+  cols_label(
+    Variable = "Variable",
+    Description = "Description"
+  ) %>%
+  tab_options(
+    column_labels.background.color = "lightblue",
+    table.width = pct(100),
+    column_labels.border.bottom.style = "solid",
+    column_labels.border.bottom.width = px(2)
+  )
+
+```
+
+The data for this study was gathered from multiple CSV files containing job postings and company information, such as job benefits, industries, skills, salaries, and company details. The datasets were merged into a unified structure, linking job postings to corresponding companies. After merging, the data was cleaned to ensure consistency and accuracy, with missing values replaced by placeholders where necessary. Duplicate entries were removed, and columns were consolidated to retain only the most relevant information. This cleaned dataset was then used for further analysis.
+
+
+#### Methods
+
+We begin our analysis by determining the industries with the highest percentage of job market share i.e. industries with the highest number of jobs. Figure 1 shows these industries and their corresponding values of job market share. It is pertinent to highlight that 'Staffing and Recruiting' had the second highest job market share however, upon further investigation, it is revealed that the jobs posted on the LinkedIn pages of these companies actually belonged to companies from other industries which had hired the recruiting company to attract more candidates for their jobs. The recruiting company itself does not possess that job market share, therefore we exclude this industry from our analysis going forward. We observe the highest value of job market share for 'Hospitals and Health Care' with $13.4\%$, almost twice as much as any other industry.
+
+```{r, echo=FALSE}
+# Finding the industries with the most number of jobs
+top_industries <- fulltime_postings |>
+  group_by(industry) |>
+  summarize(count = n(), .groups = "drop") |>
+  mutate(total = sum(count),
+         percent = (count/total) * 100) |>
+  arrange(desc(percent))
+```
+
+```{r, echo= FALSE}
+# Graph showing the % job share of the top industries
+plot1 <- top_industries |>
+  slice(2:15) |>
+  mutate(industry = fct_reorder(industry, count)) |>
+  ggplot(aes(x = industry, y = percent)) +
+  geom_point(size = 2, color = "steelblue3") +
+  # geom_label(aes(label = paste0(round(percent, 1), "%")), vjust = -0.2, size = 3) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14),
+                     labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)) +
+  theme_light() +
+  labs(x = "Industry", y = "% Job Market Share",
+       title = expression(bold("Figure 1") * ": Job Market Share Industries")) +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 14, hjust = 0.5))
+print(plot1)
+  
+```
+
+Subsequently, we identify the top companies within these industries since our ultimate objective is to find a reliable, rapidly growing anchor client. Figure 2 shows the 30 companies within these industries that have the highest number of job postings.
+
+```{r, fig.width = 10, echo=FALSE}
+top_companies <- fulltime_postings |>
+  filter(industry != "Staffing and Recruiting") |>
+  group_by(company_name) |>
+  summarize(count = n(), .groups = "drop") |>
+  arrange(desc(count)) |>
+  head(30)
+```
+
+```{r, fig.width=14, fig.height=10, echo=FALSE}
+plot2 <- suppressWarnings ({
+  fulltime_postings |>
+  filter(company_name %in% top_companies$company_name) |>
+  mutate(company_name = fct_infreq(company_name)) |>
+  ggplot(aes(x = company_name, fill = industry)) +
+  geom_bar(color = "gray10", width = 0.8) +
+  coord_flip() +
+  scale_fill_manual(values = c(brewer.pal(13, "Set3"), "steelblue")) +
+  theme_light() +
+  labs(x = "Company", y = "Number of Job Postings",
+       fill = "Industry",
+       title = expression(bold("Figure 2") * ": Companies with most Job Postings")) +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 14, hjust = 0.5),
+        legend.title = element_text(size = 12, hjust = 0.5))
+})
+
+print(plot2)
+```
+
+The classification of these companies as either 'Public' or 'Private' is given in Table 2.
+
+```{r, echo=FALSE}
+company_status <- data.frame(
+  company_name = top_companies$company_name,
+  public = c("Private", "Private", "Private", "Public", "Public", "Public", "Private", "Public", "Public", "Public", "Public", "Public",
+             "Private", "Private", "Public", "Private", "Private", "Public", "Public", "Private", "Public", "Public", "Private",
+             "Private", "Private", "Public", "Public", "Private", "Public", "Private")
+)
+
+company_status |>
+  gt() |>
+  tab_header(
+    title = md("**Table 2**: Status of Top Companies")
+  ) |>
+  cols_label(
+    company_name = "Company",
+    public = "Status"
+  ) |>
+  fmt_markdown(
+    columns = c(public)
+  ) |>
+  tab_options(
+    column_labels.background.color = "steelblue3",
+    table.width = pct(100),
+    column_labels.border.bottom.style = "solid",
+    column_labels.border.bottom.width = px(2)
+  )
+```
+
+
+Next, we shift our attention towards measuring the effect of average salary (if any) on the number of jobs a company posts and the number of views it receives. Figure 3 presents two plots that highlight no evident trend in either case. For the purposes of our analysis, we only consider jobs with an average salary of $\leq \$200,000$, as values higher than this are outliers and distort the data. 
+```{r, echo=FALSE}
+plot3 <- suppressWarnings({
+  fulltime_postings |>
+  filter(industry != "Staffing and Recruiting",
+         !normalized_salary <= 0 & !normalized_salary >= 200000) |>
+  group_by(company_name) |>
+  summarize(count = n(), avg_salary = mean(normalized_salary),
+            .groups = "drop") |>
+  ggplot(aes(x = avg_salary, y = count)) +
+  geom_point(alpha = 0.1, color = "steelblue") +
+  geom_smooth(method = "lm", color = "tomato") +
+  scale_x_continuous(labels = scales::label_dollar()) +
+  theme_light() +
+  labs(x = "Average Salary", y = "Number of Jobs",
+       title = "Avg Salary vs Number of Jobs") +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 16, hjust = 0.5))
+})
+
+plot4 <- suppressWarnings({
+  fulltime_postings |>
+  filter(industry != "Staffing and Recruiting",
+         !normalized_salary <= 0 & !normalized_salary >= 200000) |>
+  group_by(company_name) |>
+  summarize(avg_salary = mean(normalized_salary), avg_views = mean(views),
+            .groups = "drop") |>
+  ggplot(aes(x = avg_salary, y = avg_views)) +
+  geom_point(alpha = 0.1, color = "steelblue") +
+  geom_smooth(method = "lm", color = "tomato") +
+  scale_x_continuous(labels = scales::label_dollar()) +
+  theme_light() +
+  labs(x = "Average Salary", y = "Number of Views",
+       title = "Avg Salary vs Number of Views") +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 16, hjust = 0.5))
+})
+```
+
+```{r, fig.width=10, fig.height=6, echo=FALSE}
+suppressWarnings({
+  suppressMessages({
+  combined_plot <-plot3 + plot4 +
+  plot_annotation(title = expression(bold("Figure 3") * ": Avg Salary Trend vs No. of Jobs & No. of Views"),
+                  tag_levels = "A")
+  print(combined_plot)
+  })
+})
+```
+
+Both regression lines have approximately a slope of 0, indicating that a higher salary does not affect the number of jobs posted by a company or the number of views a job posting receives. This finding is important in the context of our analysis, as it suggests that whether our future anchor client offers high average salaries is not a significant factor in predicting whether the company will post more jobs or receive more views on its job postings.
+
+```{r, fig.height=8, fig.width=13, echo=FALSE}
+invisible({
+  suppressWarnings({
+  plot5 <- fulltime_postings |>
+  filter(industry != "Staffing and Recruiting",
+         !normalized_salary <= 0 & !normalized_salary >= 200000,
+         company_name %in% top_companies$company_name) |>
+  ggplot(aes(x = normalized_salary, y = max_salary, color = industry)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~ industry, ncol = 3) +
+  labs(x = "Average Salary", y = "Max Salary",
+       title = expression(bold("Figure 4") * ": Salary Trends in Top Companies"), 
+                          color = "Industry") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  scale_x_continuous(labels = scales::label_dollar()) +
+  theme_light() +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 14, hjust = 0.5),
+        legend.title = element_text(size = 12, hjust = 0.5))
+
+print(plot5)
+})
+ })
+```
+
+Figure 4 further supports our findings from Figure 3, as the "Hospitals and Healthcare" industry does not have the highest average or maximum salaries, yet still has the highest number of jobs.
+
+Moving forward, we address our third research question and explore how the number of jobs and average salaries vary by state.
+
+```{r, echo=FALSE}
+register_stadiamaps(key = "a815840a-3b72-4b17-94ca-4d387f07f467")
+fulltime_postings <- fulltime_postings |>
+  mutate(state = substr(location, nchar(location) - 1, nchar(location)))
+
+
+jobs_by_state <- fulltime_postings |>
+  filter(industry != "Staffing and Recruiting",
+         normalized_salary != "NA" & normalized_salary <= 200000) |>
+  group_by(state) |>
+  summarize(job_count = n(), avg_state_salary = mean(normalized_salary), .groups = "drop") 
+
+
+state_map <- map_data("state")
+
+state_abbr_to_name <- data.frame(state_abbr = state.abb,
+                                 state_name = tolower(state.name))
+
+
+jobs_by_state <- jobs_by_state |>
+  left_join(state_abbr_to_name, by = c("state" = "state_abbr"))
+jobs_by_state <- jobs_by_state |>
+  filter(state_name != "NA")
+
+state_centroids <- state_map |>
+  group_by(region) |>
+  summarize(long = mean(long), lat = mean(lat)) |>
+  rename(state_name = region)
+
+jobs_by_state <- jobs_by_state |>
+  left_join(state_centroids, by = "state_name")
+
+jobs_by_state <- jobs_by_state |>
+  filter(lat != "NA")
+
+
+US <- c(left = -125, bottom = 24, right = -67, top = 49)
+suppressMessages({
+  us_map <- get_stadiamap(US, zoom = 5, maptype = "stamen_toner_lite")
+})
+```
+
+```{r, fig.height=5, fig.width=10, echo=FALSE}
+plot6 <- ggmap(us_map) +
+  geom_point(data = jobs_by_state, aes(x = long, y = lat,
+                                    size = job_count,
+                                    color = avg_state_salary),
+             alpha = 1) +
+  scale_color_gradient(low = "darkblue", high = "darkorange",
+                       name = "Average Salary",
+                       labels = label_dollar()) +
+  labs(x = "Longitude", y = "Latitude",
+       title = expression(bold("Figure 5") * ": Job Postings by State"),
+       size = "No. of Jobs", color = "Average Salary") +
+  theme_void() +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 14, hjust = 0.5),
+        legend.title = element_text(size = 12, hjust = 0.5))
+print(plot6)
+```
+
+Figure 5 clearly shows that the average salary and the number of jobs vary significantly by state, as expected. An interesting finding from this graph is that average salary and the number of jobs exhibit a positive relationship when viewed from a state perspective, as opposed to the company-level analysis conducted for the second research question. This provides a key insight: companies that post jobs in more states tend to pay their employees higher average salaries. While this may not directly result in more job postings or views, companies that pay their employees more typically experience rapid organizational growth.
+
+Looking back at the companies highlighted in Table 2, most already use a talent intelligence system from a third-party competitor, such as Taleo, iCIMS, or Workday. However, two companies that stand out with a high number of jobs and currently do not use an ATS are Thermo Fisher Scientific and Cogent Communications. Since both companies are public, we examine their stock growth since 2010 in Figure 6 to assess their financial stability.
+
+```{r, echo=FALSE}
+# Get stock data for example company (Amazon in this case) based on their ticker
+# and provided data ranges:
+stocks <- tq_get(c(stock_symbols <- c("TMO", "CCOI")), get  = "stock.prices",
+                    from = "2010-01-01", to = "2023-08-01")
+plot6 <- stocks |>
+  ggplot(aes(x = date, y = adjusted, color = symbol)) +
+  geom_line() +
+  # scale_x_continuous(breaks = c(2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024),
+  #                    labels = c(2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024)) +
+  scale_y_continuous(labels = label_dollar()) +
+  scale_color_manual(values = c("TMO" = "steelblue3", "CCOI" = "tomato")) +
+  theme_light() +
+  labs(x = "Year", y = "Adjusted Stock Price",
+       title = expression(bold("Figure 6") * ": Stock Comparison: TMO vs CCOI"),
+       color = "Stock") +
+  theme(axis.title = element_text(size = 12, hjust = 0.5),
+        plot.title = element_text(size = 14, hjust = 0.5),
+        legend.title = element_text(size = 12, hjust = 0.5))
+print(plot6)
+```
+As we can observe, Thermo Fisher's stock growth is significantly higher compared to Cogent Communications. Next, we examine the states where Thermo Fisher has posted jobs to verify whether our earlier claim holds true. 
+
+```{r, echo=FALSE}
+tmo_jobs <- fulltime_postings |>
+  filter(company_name == "Thermo Fisher Scientific") |>
+  group_by(state) |>
+  summarize(count = n(), .groups = "drop") |>
+  filter(state != "es")
+tmo_jobs |>
+  gt() |>
+  tab_header(
+    title = md("**Table 3**: Thermo Fischer Jobs by State")
+  ) |>
+  cols_label(
+    state = "State",
+    count = "No. of Jobs"
+  ) |>
+  fmt_markdown(
+    columns = c(count)
+  ) |>
+  tab_options(
+    column_labels.background.color = "steelblue3",
+    table.width = pct(50),
+    column_labels.border.bottom.style = "solid",
+    column_labels.border.bottom.width = px(2)
+  )
+```
+
+Table 3 portrays the diversity of job postings from a geographical perspective validating our claim and also attaching a higher positive notion with Thermo Fischer as a potential anchor client.
+
+
+#### Results
+
+Our findings lead us to strongly recommend Thermo Fischer Scientific, a public company and global leader in scientific instruments, reagents, and consumables primarily serving customers in healthcare, life sciences and laboratory research. The company was formed in 2006 through the merger of Thermo Electron Corporation and Fischer Scientific, and has shown incredibly high growth over the past 14 years. The stock has shown stability instead of growth in the past few years but that can be attributed to COVID-19 and the recession in the global economy as a whole. The company's stock maintaining stability instead of drastically dipping during this time is a testament to its robust strategic vision.
+
+
+#### Discussion
+In this analysis, Healthcare emerged as the leading industry in job postings, followed closely by IT Services, Financial Services, and Software Development. These sectors present significant growth and investment opportunities, making them key targets for both job seekers and employers. Thermo Fisher Scientific was identified as the most suitable anchor client due to its focus on high-skilled positions, competitive salary offerings, strong financial performance, and the absence of an ATS system, aligning well with the talent platform’s AI-driven resume matching objectives. However, the study is not without limitations. The reliance solely on LinkedIn job postings may not fully capture the broader job market, as other platforms like Glassdoor and Indeed could provide additional insights and reflect different trends. Additionally, the data from 2023 and 2024 offers only a snapshot in time, which may not capture longer-term trends or shifts in hiring demands. Future studies could broaden the scope by including data from other platforms, examining regional hiring trends, analyzing industry-specific skills in demand, and evaluating the impact of emerging technologies on hiring practices. This would provide a more comprehensive and nuanced understanding of the job market, helping to identify evolving trends and opportunities for growth.
